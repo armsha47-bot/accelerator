@@ -1,0 +1,182 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #0a0a0f;
+  color: #f8f8ff;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* App is dark-only; lock it in. */
+body {
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+}
+
+/* Respect the iPhone safe areas when installed as a PWA. */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Hide scrollbars on horizontal quick-action rows while keeping scroll. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@layer components {
+  /* The signature card: rounded, bordered, soft. */
+  .card {
+    @apply rounded-3xl border border-border bg-surface p-5 shadow-soft;
+  }
+  .card-sm {
+    @apply rounded-2xl border border-border bg-surface p-4;
+  }
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium;
+  }
+  .btn-primary {
+    @apply rounded-2xl bg-white px-5 py-3 font-semibold text-bg transition-all
+      active:scale-[0.98] disabled:opacity-50;
+    box-shadow: 0 0 18px rgba(255, 255, 255, 0.25);
+  }
+  .btn-ghost {
+    @apply rounded-2xl border border-border bg-elevated px-5 py-3 font-medium text-ink
+      transition-all active:scale-[0.98];
+  }
+  .input {
+    @apply w-full rounded-2xl border border-border bg-elevated px-5 py-3 text-ink
+      placeholder:text-muted focus:border-white focus:outline-none;
+  }
+  .chip {
+    @apply inline-flex shrink-0 items-center gap-2 rounded-full border border-border
+      bg-elevated px-4 py-2 text-sm font-medium text-ink transition-all active:scale-95;
+  }
+}
+
+/* Custom circular checkbox bounce (habits/tasks). */
+.check-pop {
+  animation: scale-bounce 0.35s ease-out;
+}
+
+/* White glow helpers — the monochrome app's signature. */
+.glow-text {
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
+}
+.glow-svg {
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.35));
+}
+.glow-white-strong {
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.6));
+}
+
+/* ── Crest animations ── */
+@keyframes crest-breathe {
+  0%, 100% { transform: translateZ(0) scale(1); }
+  50% { transform: translateZ(0) scale(1.03); }
+}
+.crest-breathe {
+  animation: crest-breathe 3s ease-in-out infinite;
+}
+@keyframes crest-gem-pulse {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+.crest-gem-pulse {
+  animation: crest-gem-pulse 2s ease-in-out infinite;
+}
+@keyframes crest-spin {
+  to { transform: rotate(360deg); }
+}
+.crest-spin {
+  animation: crest-spin 4s linear infinite;
+}
+.crest-spin-rev {
+  animation: crest-spin 8s linear infinite reverse;
+}
+@keyframes crest-twinkle {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 0.55; }
+}
+.crest-twinkle {
+  animation: crest-twinkle 1.6s ease-in-out infinite;
+}
+/* Diagonal light sweep across the shield face. */
+@keyframes crest-shimmer {
+  0% { transform: translateX(0) rotate(18deg); }
+  60%, 100% { transform: translateX(150px) rotate(18deg); }
+}
+.crest-shimmer {
+  animation: crest-shimmer 3.2s ease-in-out infinite;
+}
+/* Gem sparkle twinkle. */
+@keyframes crest-sparkle {
+  0%, 100% { opacity: 0.25; transform: scale(0.7); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+.crest-sparkle {
+  animation: crest-sparkle 1.8s ease-in-out infinite;
+}
+/* Gentle float bob for the whole crest. */
+@keyframes crest-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2.5px); }
+}
+.crest-float {
+  animation: crest-float 3.5s ease-in-out infinite;
+}
+/* Wing beat. */
+@keyframes crest-flap {
+  0%, 100% { transform: scaleY(1) translateY(0); }
+  50% { transform: scaleY(1.07) translateY(-1.5px); }
+}
+.crest-flap {
+  animation: crest-flap 2.4s ease-in-out infinite;
+}
+/* Crown / halo float. */
+@keyframes crest-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+.crest-bob {
+  animation: crest-bob 2.8s ease-in-out infinite;
+}
+/* Slow reverse spin for a second orbit ring. */
+.crest-spin-slow2 {
+  animation: crest-spin 14s linear infinite;
+}
+.crest-orbit-rev {
+  animation: crest-spin 10s linear infinite reverse;
+}
+
+/* Shimmer sweep for skeleton loaders. */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
+  animation: shimmer 1.4s infinite;
+}

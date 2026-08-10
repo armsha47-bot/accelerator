@@ -1,0 +1,10 @@
+{
+  "crons": [
+    { "path": "/api/cron/update-ghosts", "schedule": "0 0 * * *" },
+    { "path": "/api/cron/weekly-quests", "schedule": "0 12 * * 1" },
+    { "path": "/api/cron/weekly-review", "schedule": "0 0 * * 1" },
+    { "path": "/api/cron/reminders?kind=plan", "schedule": "30 12 * * *" },
+    { "path": "/api/cron/reminders?kind=streak", "schedule": "0 1 * * *" },
+    { "path": "/api/cron/reminders?kind=quest", "schedule": "0 1 * * 0" }
+  ]
+}
