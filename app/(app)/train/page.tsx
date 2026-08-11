@@ -37,6 +37,8 @@ export default function TrainPage() {
   const [workout, setWorkout] = useState<Exercise[] | null>(null);
   const [exName, setExName] = useState("");
   const [saving, setSaving] = useState(false);
+  // Bumped after a workout is saved so the history list below re-fetches.
+  const [workoutRefresh, setWorkoutRefresh] = useState(0);
 
   const volume = (workout ?? []).reduce(
     (v, ex) => v + ex.sets.reduce((s, set) => s + set.reps * set.weight, 0),
@@ -76,7 +78,7 @@ export default function TrainPage() {
       await award(XP.WORKOUT, "workout");
       setWorkout(null);
       setSaving(false);
-      alert("Workout saved! +25 XP");
+      setWorkoutRefresh((k) => k + 1);
       return;
     }
 
@@ -100,7 +102,7 @@ export default function TrainPage() {
     await award(XP.WORKOUT, "workout");
     setWorkout(null);
     setSaving(false);
-    alert("Workout saved! +25 XP");
+    setWorkoutRefresh((k) => k + 1);
   }
 
   // Recovery score — demo uses good sleep + light prior day; real app would read
@@ -184,7 +186,7 @@ export default function TrainPage() {
       <BodyWeight supabase={supabase} award={award} />
 
       {/* Workout history */}
-      <WorkoutHistory supabase={supabase} />
+      <WorkoutHistory supabase={supabase} refresh={workoutRefresh} />
     </PageWrapper>
   );
 }
@@ -315,10 +317,10 @@ function BodyWeight({ supabase, award }: { supabase: ReturnType<typeof browserCl
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from("body_weight_logs").upsert(
-      { user_id: user.id, weight_value: n, unit: "lbs", date: today },
-      { onConflict: "user_id,date" } as any
-    );
+    // One entry per day. body_weight_logs has no unique(user_id,date), so a real
+    // upsert errors — delete today's row (if any) then insert instead.
+    await supabase.from("body_weight_logs").delete().eq("user_id", user.id).eq("date", today);
+    await supabase.from("body_weight_logs").insert({ user_id: user.id, weight_value: n, unit: "lbs", date: today });
     await award(XP.BODY_WEIGHT, "body weight");
     setSaved(true);
     setVal("");
@@ -372,7 +374,7 @@ function BodyWeight({ supabase, award }: { supabase: ReturnType<typeof browserCl
   );
 }
 
-function WorkoutHistory({ supabase }: { supabase: ReturnType<typeof browserClient> }) {
+function WorkoutHistory({ supabase, refresh }: { supabase: ReturnType<typeof browserClient>; refresh: number }) {
   const [workouts, setWorkouts] = useState<any[]>([]);
 
   const load = useCallback(async () => {
@@ -395,7 +397,7 @@ function WorkoutHistory({ supabase }: { supabase: ReturnType<typeof browserClien
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refresh]);
 
   async function del(id: string) {
     const next = workouts.filter((x) => x.id !== id);
