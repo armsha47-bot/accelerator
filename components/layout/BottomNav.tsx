@@ -15,8 +15,11 @@ const TABS = [
 export default function BottomNav() {
   const path = usePathname();
   return (
-    <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 mx-auto max-w-md px-3 pb-3">
-      <div className="flex items-center justify-around rounded-t-3xl border border-border bg-surface/90 px-2 py-2 shadow-soft backdrop-blur-lg">
+    <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-md px-3">
+      <div
+        className="flex items-center justify-around rounded-t-3xl border border-border bg-surface/90 px-2 pt-2 shadow-soft backdrop-blur-lg"
+        style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}
+      >
         {TABS.map(({ href, label, icon: Icon }) => {
           const active = href === "/" ? path === "/" : path.startsWith(href);
           return (
