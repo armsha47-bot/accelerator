@@ -9,7 +9,30 @@ import { compressImage } from "@/lib/image";
 import { DEMO, demoProfile } from "@/lib/demo";
 import { demoGet, demoSet } from "@/lib/demo-store";
 import { searchFoodDbHits } from "@/lib/food-db";
-import type { FoodHit, FoodLog, FoodPortion, MealType, Profile } from "@/lib/types";
+import type { CustomFood, CustomIngredient, FoodHit, FoodLog, FoodPortion, MealType, Profile } from "@/lib/types";
+
+// A blank ingredient row for the custom-food builder.
+const blankIngredient = (): CustomIngredient => ({ name: "", calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+
+// Convert a saved custom food into a portion-aware FoodHit (base = 1 serving).
+function customToHit(c: CustomFood): FoodHit {
+  const u = c.serving_label || "serving";
+  return {
+    food_name: c.name,
+    base_unit: u,
+    calories: c.calories,
+    protein_g: c.protein_g,
+    carbs_g: c.carbs_g,
+    fat_g: c.fat_g,
+    portions: [
+      { label: `1 ${u}`, quantity: 1 },
+      { label: `½ ${u}`, quantity: 0.5 },
+      { label: `2 ${u}`, quantity: 2 },
+      { label: `3 ${u}`, quantity: 3 },
+    ],
+    source: "custom",
+  };
+}
 import PageWrapper from "@/components/layout/PageWrapper";
 
 const MEALS: MealType[] = ["breakfast", "lunch", "dinner", "snack"];
@@ -29,6 +52,12 @@ export default function NutritionPage() {
   const [picking, setPicking] = useState<FoodHit | null>(null);
   const [portionIdx, setPortionIdx] = useState(0);
   const [count, setCount] = useState(1);
+  // Custom / homemade foods.
+  const [customFoods, setCustomFoods] = useState<CustomFood[]>([]);
+  const [building, setBuilding] = useState(false);
+  const [bName, setBName] = useState("");
+  const [bServings, setBServings] = useState(1);
+  const [bIngredients, setBIngredients] = useState<CustomIngredient[]>([blankIngredient()]);
   const [meal, setMeal] = useState<MealType>("breakfast");
   const [scanItems, setScanItems] = useState<any[] | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -53,20 +82,23 @@ export default function NutritionPage() {
       });
       setLogs(demoGet<FoodLog[]>(`foodLogs:${date}`, []));
       setWater(demoGet<number>(`water:${date}`, 0));
+      setCustomFoods(demoGet<CustomFood[]>("customFoods", []));
       return;
     }
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-    const [{ data: prof }, { data: foodRows }, { data: checkin }] = await Promise.all([
+    const [{ data: prof }, { data: foodRows }, { data: checkin }, { data: customRows }] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       supabase.from("food_logs").select("*").eq("user_id", user.id).eq("date", date),
       supabase.from("daily_checkins").select("water_glasses").eq("user_id", user.id).eq("date", date).maybeSingle(),
+      supabase.from("custom_foods").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
     ]);
     setProfile(prof as Profile);
     setLogs((foodRows ?? []) as FoodLog[]);
     setWater(checkin?.water_glasses ?? 0);
+    setCustomFoods((customRows ?? []) as CustomFood[]);
   }, [supabase, date]);
 
   useEffect(() => {
@@ -84,13 +116,20 @@ export default function NutritionPage() {
   );
   const goal = profile?.daily_calorie_goal ?? 2500;
 
+  // Your saved custom foods that match the query — always shown first.
+  function matchingCustom(): FoodHit[] {
+    const q = query.trim().toLowerCase();
+    return customFoods.filter((c) => c.name.toLowerCase().includes(q)).map(customToHit);
+  }
+
   async function search() {
     if (!query.trim()) return;
     setSearching(true);
     setPicking(null);
+    const mine = matchingCustom();
     try {
       if (DEMO) {
-        setResults(searchFoodDbHits(query));
+        setResults([...mine, ...searchFoodDbHits(query)]);
         return;
       }
       const res = await fetch("/api/food-search", {
@@ -99,9 +138,9 @@ export default function NutritionPage() {
         body: JSON.stringify({ query }),
       });
       const data = await res.json();
-      setResults(data.foods?.length ? data.foods : searchFoodDbHits(query));
+      setResults([...mine, ...(data.foods?.length ? data.foods : searchFoodDbHits(query))]);
     } catch {
-      setResults(searchFoodDbHits(query));
+      setResults([...mine, ...searchFoodDbHits(query)]);
     } finally {
       setSearching(false);
     }
@@ -184,6 +223,59 @@ export default function NutritionPage() {
       .single();
     if (data) setLogs((l) => [...l, data as FoodLog]);
     await award(XP.MEAL, "log meal");
+  }
+
+  // Totals summed from the builder's ingredients (for the whole recipe).
+  const bTotals = bIngredients.reduce(
+    (a, i) => ({ cal: a.cal + (+i.calories || 0), p: a.p + (+i.protein_g || 0), c: a.c + (+i.carbs_g || 0), f: a.f + (+i.fat_g || 0) }),
+    { cal: 0, p: 0, c: 0, f: 0 }
+  );
+  const servings = Math.max(1, bServings);
+
+  function resetBuilder() {
+    setBName("");
+    setBServings(1);
+    setBIngredients([blankIngredient()]);
+    setBuilding(false);
+  }
+
+  async function saveCustomFood() {
+    if (!bName.trim()) return;
+    const per = {
+      name: bName.trim(),
+      serving_label: "serving",
+      calories: Math.round(bTotals.cal / servings),
+      protein_g: +(bTotals.p / servings).toFixed(1),
+      carbs_g: +(bTotals.c / servings).toFixed(1),
+      fat_g: +(bTotals.f / servings).toFixed(1),
+      ingredients: bIngredients.filter((i) => i.name.trim()),
+    };
+    if (DEMO) {
+      const row = { id: `demo-${Date.now()}`, ...per } as CustomFood;
+      setCustomFoods((c) => {
+        const next = [row, ...c];
+        demoSet("customFoods", next);
+        return next;
+      });
+      resetBuilder();
+      return;
+    }
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase.from("custom_foods").insert({ user_id: user.id, ...per }).select().single();
+    if (data) setCustomFoods((c) => [data as CustomFood, ...c]);
+    resetBuilder();
+  }
+
+  async function deleteCustomFood(id: string) {
+    setCustomFoods((c) => {
+      const next = c.filter((x) => x.id !== id);
+      if (DEMO) demoSet("customFoods", next);
+      return next;
+    });
+    if (!DEMO) await supabase.from("custom_foods").delete().eq("id", id);
   }
 
   async function removeFood(id: string) {
@@ -549,6 +641,91 @@ export default function NutritionPage() {
                 </span>
                 <span className="shrink-0 text-sm text-muted">{f.calories} cal / {f.base_unit}</span>
               </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* My foods (custom / homemade) */}
+      <section className="card mb-4">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="font-semibold">My foods</h3>
+          {!building && (
+            <button className="chip" onClick={() => setBuilding(true)}>+ Create</button>
+          )}
+        </div>
+
+        {building ? (
+          <div className="space-y-3">
+            <input className="input" placeholder="Food name (e.g. Mom's pasta)" value={bName} onChange={(e) => setBName(e.target.value)} />
+
+            <div>
+              <p className="mb-1 text-xs text-muted">Ingredients</p>
+              <div className="space-y-2">
+                {bIngredients.map((ing, i) => (
+                  <div key={i} className="rounded-2xl bg-elevated p-2">
+                    <div className="mb-1 flex items-center gap-2">
+                      <input
+                        className="flex-1 rounded-xl bg-surface px-3 py-2 text-sm"
+                        placeholder="Ingredient"
+                        value={ing.name}
+                        onChange={(e) => setBIngredients((s) => s.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
+                      />
+                      {bIngredients.length > 1 && (
+                        <button className="text-muted" onClick={() => setBIngredients((s) => s.filter((_, j) => j !== i))} aria-label="Remove">✕</button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {(["calories", "protein_g", "carbs_g", "fat_g"] as const).map((k) => (
+                        <div key={k}>
+                          <input
+                            type="number"
+                            className="w-full rounded-xl bg-surface px-2 py-1.5 text-center text-sm"
+                            value={(ing as any)[k] || ""}
+                            onChange={(e) => setBIngredients((s) => s.map((x, j) => (j === i ? { ...x, [k]: +e.target.value } : x)))}
+                          />
+                          <p className="mt-0.5 text-center text-[10px] text-muted">{k === "calories" ? "cal" : k[0] + "g"}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button className="mt-2 text-sm text-muted" onClick={() => setBIngredients((s) => [...s, blankIngredient()])}>+ Add ingredient</button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted">Servings this makes</span>
+              <div className="flex items-center gap-3">
+                <button onClick={() => setBServings(Math.max(1, bServings - 1))} className="h-8 w-8 rounded-full bg-elevated text-lg leading-none">−</button>
+                <span className="w-6 text-center font-semibold">{servings}</span>
+                <button onClick={() => setBServings(bServings + 1)} className="h-8 w-8 rounded-full bg-elevated text-lg leading-none">+</button>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-elevated p-3 text-center text-sm">
+              <span className="text-muted">Per serving: </span>
+              <span className="font-semibold">{Math.round(bTotals.cal / servings)} cal</span>
+              <span className="text-muted"> · {Math.round(bTotals.p / servings)}p {Math.round(bTotals.c / servings)}c {Math.round(bTotals.f / servings)}f</span>
+            </div>
+
+            <div className="flex gap-2">
+              <button className="btn-primary flex-1 disabled:opacity-50" disabled={!bName.trim()} onClick={saveCustomFood}>Save food</button>
+              <button className="btn-ghost" onClick={resetBuilder}>Cancel</button>
+            </div>
+          </div>
+        ) : customFoods.length === 0 ? (
+          <p className="text-sm text-muted">Build homemade foods from their ingredients — they&apos;ll show up here and in search.</p>
+        ) : (
+          <div className="space-y-2">
+            {customFoods.map((c) => (
+              <div key={c.id} className="flex items-center justify-between rounded-2xl bg-elevated p-3">
+                <button className="min-w-0 flex-1 text-left" onClick={() => pickFood(customToHit(c))}>
+                  <span className="block truncate font-medium">{c.name}</span>
+                  <span className="text-xs text-muted">{Math.round(c.calories)} cal · {Math.round(c.protein_g)}p {Math.round(c.carbs_g)}c {Math.round(c.fat_g)}f / {c.serving_label}</span>
+                </button>
+                <button onClick={() => deleteCustomFood(c.id)} className="ml-2 shrink-0 text-muted" aria-label="Delete">✕</button>
+              </div>
             ))}
           </div>
         )}

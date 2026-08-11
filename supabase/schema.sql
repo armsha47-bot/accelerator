@@ -103,6 +103,21 @@ create table if not exists food_logs (
   logged_at timestamptz default now()
 );
 
+-- User-defined foods (homemade meals). Macros are per serving; `ingredients`
+-- keeps the breakdown the user built it from.
+create table if not exists custom_foods (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references profiles(id) on delete cascade,
+  name text,
+  serving_label text default 'serving',
+  calories numeric default 0,
+  protein_g numeric default 0,
+  carbs_g numeric default 0,
+  fat_g numeric default 0,
+  ingredients jsonb default '[]',
+  created_at timestamptz default now()
+);
+
 -- ── Training ───────────────────────────────────────────────────────────────
 create table if not exists workouts (
   id uuid primary key default gen_random_uuid(),
@@ -397,7 +412,7 @@ declare t text;
 begin
   foreach t in array array[
     'profiles','daily_plans','habits','habit_completions','quests','food_logs',
-    'workouts','routines','physique_logs','body_weight_logs','xp_transactions',
+    'custom_foods','workouts','routines','physique_logs','body_weight_logs','xp_transactions',
     'user_badges','custom_tasks','task_day_overrides','task_completions',
     'wins_journal','ritual_sessions','focus_sessions','daily_checkins',
     'weekly_reviews','ai_habit_insights','daily_completion_status',
