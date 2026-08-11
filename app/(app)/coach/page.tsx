@@ -78,7 +78,7 @@ export default function CoachPage() {
     <PageWrapper className="flex flex-col pb-24">
       <h1 className="mb-3 text-2xl font-bold">AI Coach</h1>
 
-      <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto pb-16">
+      <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto pb-28">
         {messages.length === 0 && (
           <div className="card text-sm text-muted">
             I&apos;m your coach. Ask me about your training, your plan, a big game, a test — anything. Let&apos;s get to work.
@@ -98,7 +98,7 @@ export default function CoachPage() {
 
       <div
         className="fixed inset-x-0 mx-auto flex max-w-md gap-2 px-4"
-        style={{ bottom: "calc(env(safe-area-inset-bottom) + 5rem)" }}
+        style={{ bottom: "calc(env(safe-area-inset-bottom) + 6.5rem)" }}
       >
         <input
           className="input flex-1"
