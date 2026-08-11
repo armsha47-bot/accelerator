@@ -49,6 +49,8 @@ export default function HomePage() {
   const [doneHabits, setDoneHabits] = useState<Set<string>>(new Set());
   const [week, setWeek] = useState<Record<string, DayStatus>>({});
   const [customTasks, setCustomTasks] = useState<any[]>([]);
+  // Task keys the user removed for today (base or custom), kept in localStorage.
+  const [hiddenTasks, setHiddenTasks] = useState<string[]>([]);
   const [review, setReview] = useState<{ id: string; content: string; week_start: string } | null>(null);
   const [quests, setQuests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,6 +62,14 @@ export default function HomePage() {
   const date = todayISO();
 
   const load = useCallback(async () => {
+    // Tasks removed for today (works in both demo and real via localStorage).
+    if (typeof window !== "undefined") {
+      try {
+        setHiddenTasks(JSON.parse(localStorage.getItem(`accel_hidden:${date}`) || "[]"));
+      } catch {
+        setHiddenTasks([]);
+      }
+    }
     if (DEMO) {
       const ov = demoGet<{ name?: string; position?: string }>("profileOverrides", {});
       const streakOv = demoGet<{ streak: number; longest_streak: number; last_active: string }>("streakState", {} as any);
@@ -175,8 +185,8 @@ export default function HomePage() {
         },
       });
     }
-    return out;
-  }, [plan, customTasks]);
+    return out.filter((t) => !hiddenTasks.includes(t.key));
+  }, [plan, customTasks, hiddenTasks]);
 
   const tasksTotal = allTasks.length;
   const tasksDone = allTasks.filter((t) => doneTasks.has(t.key)).length;
@@ -311,16 +321,25 @@ export default function HomePage() {
     setReview(null);
   }
 
+  // Remove any task (base plan or custom) for today. Hidden keys live in
+  // localStorage so it works without a schema change; custom tasks also get a
+  // server-side day override so they stay gone after a reload on any device.
   async function removeTaskToday(key: string) {
-    // Only custom tasks can be removed for the day.
-    if (!key.startsWith("custom:")) return;
-    const taskId = key.slice("custom:".length);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-    setCustomTasks((ts) => ts.filter((t) => t.id !== taskId));
-    await supabase.from("task_day_overrides").insert({ user_id: user.id, task_id: taskId, date, action: "remove" });
+    setHiddenTasks((h) => {
+      const next = Array.from(new Set([...h, key]));
+      if (typeof window !== "undefined") localStorage.setItem(`accel_hidden:${date}`, JSON.stringify(next));
+      return next;
+    });
+    if (key.startsWith("custom:")) {
+      const taskId = key.slice("custom:".length);
+      setCustomTasks((ts) => ts.filter((t) => t.id !== taskId));
+      if (!DEMO) {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) await supabase.from("task_day_overrides").insert({ user_id: user.id, task_id: taskId, date, action: "remove" });
+      }
+    }
   }
 
   if (loading) return <HomeSkeleton />;
@@ -389,7 +408,7 @@ export default function HomePage() {
                       task={task}
                       done={doneTasks.has(tkey)}
                       onToggle={() => toggleTask(tkey, task)}
-                      onRemove={tkey.startsWith("custom:") ? () => removeTaskToday(tkey) : undefined}
+                      onRemove={() => removeTaskToday(tkey)}
                     />
                   ))}
                 </div>
@@ -561,7 +580,6 @@ function TaskRow({
   onRemove?: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [menu, setMenu] = useState(false);
   return (
     <motion.div
       className="rounded-2xl bg-elevated p-3"
@@ -582,9 +600,9 @@ function TaskRow({
               transition={{ duration: 0.2 }}
             />
           </span>
-          {task.description && <p className="text-xs text-muted">{task.description}</p>}
+          {task.description && <p className="mt-0.5 text-xs text-muted">{task.description}</p>}
           {task.why_this_matters && (
-            <button onClick={() => setOpen((o) => !o)} className="mt-1 text-xs font-medium text-ink">
+            <button onClick={() => setOpen((o) => !o)} className="mt-1 block text-xs font-medium text-ink">
               {open ? "Hide" : "Why this matters"}
             </button>
           )}
@@ -592,34 +610,12 @@ function TaskRow({
             <p className="mt-1 rounded-xl bg-surface p-2 text-xs text-muted">{task.why_this_matters}</p>
           )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
           <span className="pill bg-surface text-gold">+{task.xp_reward}</span>
           {onRemove && (
-            <div className="relative">
-              <button onClick={() => setMenu((m) => !m)} className="px-1 text-lg text-muted">···</button>
-              {menu && (
-                <div className="absolute right-0 top-6 z-10 w-40 rounded-2xl border border-border bg-surface p-1 shadow-soft">
-                  <button
-                    onClick={() => {
-                      setMenu(false);
-                      onToggle();
-                    }}
-                    className="block w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-elevated"
-                  >
-                    Complete
-                  </button>
-                  <button
-                    onClick={() => {
-                      setMenu(false);
-                      onRemove();
-                    }}
-                    className="block w-full rounded-xl px-3 py-2 text-left text-sm text-macroFat hover:bg-elevated"
-                  >
-                    Remove today
-                  </button>
-                </div>
-              )}
-            </div>
+            <button onClick={onRemove} aria-label="Delete task" className="px-1 text-muted transition-colors hover:text-macroFat">
+              ✕
+            </button>
           )}
         </div>
       </div>
