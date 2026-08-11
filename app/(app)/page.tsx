@@ -62,7 +62,8 @@ export default function HomePage() {
   const load = useCallback(async () => {
     if (DEMO) {
       const ov = demoGet<{ name?: string; position?: string }>("profileOverrides", {});
-      setProfile({ ...demoProfile, ...ov });
+      const streakOv = demoGet<{ streak: number; longest_streak: number; last_active: string }>("streakState", {} as any);
+      setProfile({ ...demoProfile, ...ov, ...streakOv });
       setPlan(demoPlan);
       setHabits([...demoHabits, ...demoGet<Habit[]>("customHabits", [])]);
       setWeek(demoWeek);
@@ -194,6 +195,34 @@ export default function HomePage() {
     }
     prevAllRef.current = allDoneToday;
   }, [allDoneToday, date, tasksTotal]);
+
+  // Streak: a day "counts" once 3 tasks are done. The streak number continues
+  // if the previous counted day was yesterday, resets to 1 after a gap, and
+  // shows 0 when a day was missed. last_active holds the last counted date.
+  const yesterday = todayISO(new Date(Date.now() - 86400000));
+  const effectiveStreak =
+    !profile ? 0 : profile.last_active === date || profile.last_active === yesterday ? profile.streak ?? 0 : 0;
+
+  const streakCreditedRef = useRef(false);
+  useEffect(() => {
+    if (!profile || tasksDone < 3 || streakCreditedRef.current) return;
+    streakCreditedRef.current = true;
+    if (profile.last_active === date) return; // already counted today
+    const newStreak = profile.last_active === yesterday ? (profile.streak ?? 0) + 1 : 1;
+    const newLongest = Math.max(profile.longest_streak ?? 0, newStreak);
+    setProfile((p) => (p ? { ...p, streak: newStreak, longest_streak: newLongest, last_active: date } : p));
+    (async () => {
+      if (DEMO) {
+        demoSet("streakState", { streak: newStreak, longest_streak: newLongest, last_active: date });
+        return;
+      }
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) await supabase.from("profiles").update({ streak: newStreak, longest_streak: newLongest, last_active: date }).eq("id", user.id);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasksDone, profile]);
 
   async function toggleTask(key: string, task: PlanTask) {
     const isDone = doneTasks.has(key);
@@ -454,7 +483,7 @@ export default function HomePage() {
         <h1 className="text-sm font-medium text-muted glow-text">
           Good {greeting()}, {profile?.name ?? "athlete"}
         </h1>
-        <FireStreakCounter streak={profile?.streak ?? 0} tasksToday={tasksDone} />
+        <FireStreakCounter streak={effectiveStreak} tasksToday={tasksDone} />
       </header>
 
       {/* Weekly review */}
