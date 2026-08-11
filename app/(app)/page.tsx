@@ -22,9 +22,9 @@ import CustomizeHomeSheet from "@/components/home/CustomizeHomeSheet";
 import { useHomePrefs, type HomeSectionId } from "@/hooks/useHomePrefs";
 
 const SLOTS: { key: Slot; label: string; accent: string }[] = [
-  { key: "morning", label: "Morning", accent: "#60A5FA" },
-  { key: "afternoon", label: "Afternoon", accent: "#F59E0B" },
-  { key: "evening", label: "Evening", accent: "#A78BFA" },
+  { key: "morning", label: "Morning", accent: "#FFFFFF" },
+  { key: "afternoon", label: "Afternoon", accent: "#FFFFFF" },
+  { key: "evening", label: "Evening", accent: "#FFFFFF" },
 ];
 
 const QUICK = [
@@ -349,7 +349,7 @@ export default function HomePage() {
             const tasks = allTasks.filter((t) => t.slot === key);
             if (tasks.length === 0) return null;
             return (
-              <div key={key} className="card-sm border-l-[3px]" style={{ borderLeftColor: accent }}>
+              <div key={key} className="card-sm border-l-[3px]" style={{ borderLeftColor: accent, boxShadow: "inset 3px 0 8px -4px rgba(255,255,255,0.6)" }}>
                 <h3 className="mb-2 text-sm font-semibold text-muted">{label}</h3>
                 <div className="space-y-2">
                   {tasks.map(({ key: tkey, task }) => (

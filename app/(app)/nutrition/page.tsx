@@ -485,9 +485,9 @@ export default function NutritionPage() {
               </div>
               <CalRing consumed={totals.cal} goal={goal} />
             </div>
-            <MacroBar label="Protein" value={totals.p} goal={profile?.protein_goal ?? 150} color="#60A5FA" />
-            <MacroBar label="Carbs" value={totals.c} goal={profile?.carbs_goal ?? 300} color="#F59E0B" />
-            <MacroBar label="Fat" value={totals.f} goal={profile?.fat_goal ?? 80} color="#EF4444" />
+            <MacroBar label="Protein" value={totals.p} goal={profile?.protein_goal ?? 150} color="#FFFFFF" />
+            <MacroBar label="Carbs" value={totals.c} goal={profile?.carbs_goal ?? 300} color="#FFFFFF" />
+            <MacroBar label="Fat" value={totals.f} goal={profile?.fat_goal ?? 80} color="#FFFFFF" />
           </>
         )}
       </section>
@@ -841,7 +841,14 @@ function MacroBar({ label, value, goal, color }: { label: string; value: number;
         <span className="text-muted">{Math.round(value)}g / {goal}g</span>
       </div>
       <div className="h-2 w-full overflow-hidden rounded-full bg-border">
-        <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, (value / goal) * 100)}%`, background: color }} />
+        <div
+          className="h-full rounded-full transition-all"
+          style={{
+            width: `${Math.min(100, (value / goal) * 100)}%`,
+            background: color,
+            boxShadow: color === "#FFFFFF" ? "0 0 8px rgba(255,255,255,0.7)" : undefined,
+          }}
+        />
       </div>
     </div>
   );
@@ -852,9 +859,9 @@ function CalRing({ consumed, goal }: { consumed: number; goal: number }) {
   const c = 2 * Math.PI * r;
   const frac = Math.min(1, consumed / goal);
   return (
-    <svg width="84" height="84" className="rotate-[-90deg]">
-      <circle cx="42" cy="42" r={r} fill="none" stroke="#2A2A3A" strokeWidth="8" />
-      <circle cx="42" cy="42" r={r} fill="none" stroke="#22C55E" strokeWidth="8" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - frac)} style={{ transition: "stroke-dashoffset 500ms" }} />
+    <svg width="84" height="84" className="rotate-[-90deg]" style={{ filter: "drop-shadow(0 0 5px rgba(255,255,255,0.7))" }}>
+      <circle cx="42" cy="42" r={r} fill="none" stroke="#2A2A2A" strokeWidth="8" />
+      <circle cx="42" cy="42" r={r} fill="none" stroke="#FFFFFF" strokeWidth="8" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - frac)} style={{ transition: "stroke-dashoffset 500ms" }} />
     </svg>
   );
 }
