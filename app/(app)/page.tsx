@@ -155,7 +155,8 @@ export default function HomePage() {
     const out: { key: string; task: PlanTask; slot: Slot; idx: number }[] = [];
     if (plan) {
       for (const { key: slot } of SLOTS) {
-        (plan[slot] ?? []).forEach((task, idx) => out.push({ key: `ai:${slot}:${idx}`, task, slot, idx }));
+        // Every task is worth a flat 15 XP (XP is not per-task configurable).
+        (plan[slot] ?? []).forEach((task, idx) => out.push({ key: `ai:${slot}:${idx}`, task: { ...task, xp_reward: XP.TASK }, slot, idx }));
       }
     }
     // Inject custom scheduled tasks into their slots.
@@ -168,7 +169,7 @@ export default function HomePage() {
           title: t.title,
           description: t.description ?? undefined,
           why_this_matters: t.why_this_matters ?? undefined,
-          xp_reward: t.xp_reward ?? 15,
+          xp_reward: XP.TASK,
           category: t.category ?? "fitness",
         },
       });
@@ -453,7 +454,7 @@ export default function HomePage() {
         <h1 className="text-sm font-medium text-muted glow-text">
           Good {greeting()}, {profile?.name ?? "athlete"}
         </h1>
-        <FireStreakCounter streak={profile?.streak ?? 0} />
+        <FireStreakCounter streak={profile?.streak ?? 0} tasksToday={tasksDone} />
       </header>
 
       {/* Weekly review */}

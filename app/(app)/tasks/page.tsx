@@ -118,7 +118,7 @@ function Sheet({ children, onClose }: { children: React.ReactNode; onClose: () =
 function TaskModal({ supabase, onClose, onSaved }: { supabase: ReturnType<typeof browserClient>; onClose: () => void; onSaved: () => void }) {
   const [title, setTitle] = useState("");
   const [why, setWhy] = useState("");
-  const [xp, setXp] = useState(15);
+  const xp = 15; // all tasks are a flat 15 XP
   const [cat, setCat] = useState<Category>("fitness");
   const [slot, setSlot] = useState<Slot>("morning");
   const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5]);
@@ -164,10 +164,6 @@ function TaskModal({ supabase, onClose, onSaved }: { supabase: ReturnType<typeof
           {CATS.map((c) => (
             <button key={c} onClick={() => setCat(c)} className={`pill capitalize ${cat === c ? "bg-white text-bg" : "bg-elevated text-muted"}`}>{c}</button>
           ))}
-        </div>
-        <div>
-          <p className="mb-1 text-sm text-muted">XP reward: {xp}</p>
-          <input type="range" min={5} max={50} step={5} value={xp} onChange={(e) => setXp(+e.target.value)} className="w-full accent-white" />
         </div>
         <div className="flex justify-between">
           {DAYS.map((d, i) => (

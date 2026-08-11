@@ -3,6 +3,7 @@
  * client optimistic updates and the server /api/award-xp route agree on values.
  */
 export const XP = {
+  TASK: 15, // every daily-plan task, flat (not per-task configurable)
   HABIT: 10,
   MEAL: 5,
   WORKOUT: 25,

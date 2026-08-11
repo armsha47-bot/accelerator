@@ -104,15 +104,9 @@ export default function SettingsPage() {
             <input className="input" value={position} onChange={(e) => setPosition(e.target.value)} placeholder="e.g. Winger / CAM" />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-sm text-muted">Daily calorie goal</label>
-            <input className="input" type="number" value={calorieGoal} onChange={(e) => setCalorieGoal(+e.target.value)} />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm text-muted">Daily XP goal</label>
-            <input className="input" type="number" value={xpGoal} onChange={(e) => setXpGoal(+e.target.value)} />
-          </div>
+        <div>
+          <label className="mb-1 block text-sm text-muted">Daily calorie goal</label>
+          <input className="input" type="number" value={calorieGoal} onChange={(e) => setCalorieGoal(+e.target.value)} />
         </div>
         <div>
           <label className="mb-1 block text-sm text-muted">Macro goals (grams)</label>
