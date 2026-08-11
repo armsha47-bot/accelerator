@@ -439,15 +439,30 @@ create policy leaderboard_update_own on leaderboard_users for update
   using (real_user_id = auth.uid()) with check (real_user_id = auth.uid());
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- Seed: 8 ghost leaderboard users.
+-- Seed: 20 ghost leaderboard users.
 -- ═══════════════════════════════════════════════════════════════════════════
+-- Steep competitive ladder: the top 3 are Apex (Level 20, millions of XP) and
+-- would take a real user years; the field descends to reachable near-term
+-- targets at the bottom. XP/levels track lib/level-utils.ts thresholds.
 insert into leaderboard_users (display_name, avatar_seed, xp, level, is_ghost) values
-  ('Marcus K.', 'marcus7',  8420, 7, true),
-  ('Jordan F.', 'jordan12', 6100, 6, true),
-  ('Kai R.',    'kai99',    4200, 5, true),
-  ('Dev S.',    'devs22',   3100, 4, true),
-  ('Tyler B.',  'tyler8',   2200, 4, true),
-  ('Noah C.',   'noah33',   1400, 3, true),
-  ('Ethan M.',  'ethanm',    800, 2, true),
-  ('Sam L.',    'saml44',    300, 1, true)
+  ('Marcus K.', 'marcus7',  12500000, 20, true),
+  ('Priya N.',  'priyan',    9600000, 20, true),
+  ('Diego R.',  'diegor',    8000000, 20, true),
+  ('Jordan F.', 'jordan12',  1150000, 15, true),
+  ('Aisha M.',  'aisham',     640000, 13, true),
+  ('Kai R.',    'kai99',      410000, 12, true),
+  ('Leo V.',    'leov',       270000, 11, true),
+  ('Dev S.',    'devs22',     180000, 10, true),
+  ('Sofia T.',  'sofiat',     120000,  9, true),
+  ('Tyler B.',  'tyler8',      82000,  9, true),
+  ('Chen W.',   'chenw',       55000,  8, true),
+  ('Noah C.',   'noah33',      38000,  7, true),
+  ('Maya P.',   'mayap',       26000,  6, true),
+  ('Omar H.',   'omarh',       17000,  6, true),
+  ('Ethan M.',  'ethanm',      11000,  5, true),
+  ('Zoe K.',    'zoek',         7000,  4, true),
+  ('Liam D.',   'liamd',        4300,  4, true),
+  ('Ava S.',    'avas',         2400,  3, true),
+  ('Sam L.',    'saml44',       1100,  2, true),
+  ('Ben Q.',    'benq',          400,  1, true)
 on conflict do nothing;
