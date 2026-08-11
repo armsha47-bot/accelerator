@@ -424,10 +424,19 @@ create policy owner_via_workout on workout_exercises for all
   using (exists (select 1 from workouts w where w.id = workout_id and w.user_id = auth.uid()))
   with check (exists (select 1 from workouts w where w.id = workout_id and w.user_id = auth.uid()));
 
--- Leaderboard: any authenticated user can read; writes are service-role only.
+-- Leaderboard: any authenticated user can read. Ghost rows and XP recomputes are
+-- written by the service role (which bypasses RLS). A user may insert/update only
+-- their OWN row (real_user_id = their uid) — onboarding relies on this to add the
+-- user to the board.
 alter table leaderboard_users enable row level security;
 drop policy if exists leaderboard_read on leaderboard_users;
 create policy leaderboard_read on leaderboard_users for select using (auth.role() = 'authenticated');
+drop policy if exists leaderboard_insert_own on leaderboard_users;
+create policy leaderboard_insert_own on leaderboard_users for insert
+  with check (real_user_id = auth.uid());
+drop policy if exists leaderboard_update_own on leaderboard_users;
+create policy leaderboard_update_own on leaderboard_users for update
+  using (real_user_id = auth.uid()) with check (real_user_id = auth.uid());
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Seed: 8 ghost leaderboard users.
