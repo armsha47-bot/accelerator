@@ -303,8 +303,8 @@ function BodyWeight({ supabase, award }: { supabase: ReturnType<typeof browserCl
     if (!n) return;
     const today = todayISO();
     if (DEMO) {
-      // One entry per day (replace today's if present), newest first.
-      const next = [{ id: `demo-${today}`, weight_value: n, unit: "lbs", date: today }, ...logs.filter((w) => w.date !== today)];
+      // Keep every entry (newest first) so the trend builds over time.
+      const next = [{ id: `demo-${Date.now()}`, weight_value: n, unit: "lbs", date: today }, ...logs];
       setLogs(next);
       demoSet("bodyWeights", next);
       await award(XP.BODY_WEIGHT, "body weight");
@@ -317,9 +317,7 @@ function BodyWeight({ supabase, award }: { supabase: ReturnType<typeof browserCl
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-    // One entry per day. body_weight_logs has no unique(user_id,date), so a real
-    // upsert errors — delete today's row (if any) then insert instead.
-    await supabase.from("body_weight_logs").delete().eq("user_id", user.id).eq("date", today);
+    // Keep every logged weight (no upsert/replace) so history persists forever.
     await supabase.from("body_weight_logs").insert({ user_id: user.id, weight_value: n, unit: "lbs", date: today });
     await award(XP.BODY_WEIGHT, "body weight");
     setSaved(true);

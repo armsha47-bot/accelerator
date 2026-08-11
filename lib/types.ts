@@ -40,6 +40,7 @@ export interface Profile {
   weight_unit: string;
   onboarded: boolean;
   last_active: string | null;
+  streak_date: string | null; // last date the daily streak was credited
   created_at: string;
 }
 

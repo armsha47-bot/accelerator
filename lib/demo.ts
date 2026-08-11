@@ -30,6 +30,7 @@ export const demoProfile: Profile = {
   weight_unit: "lbs",
   onboarded: true,
   last_active: todayISO(),
+  streak_date: null,
   created_at: new Date(Date.now() - 60 * 86400000).toISOString(),
 };
 

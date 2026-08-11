@@ -198,28 +198,29 @@ export default function HomePage() {
 
   // Streak: a day "counts" once 3 tasks are done. The streak number continues
   // if the previous counted day was yesterday, resets to 1 after a gap, and
-  // shows 0 when a day was missed. last_active holds the last counted date.
+  // shows 0 when a day was missed. streak_date holds the last counted date — a
+  // dedicated field so award-xp's last_active writes never interfere.
   const yesterday = todayISO(new Date(Date.now() - 86400000));
   const effectiveStreak =
-    !profile ? 0 : profile.last_active === date || profile.last_active === yesterday ? profile.streak ?? 0 : 0;
+    !profile ? 0 : profile.streak_date === date || profile.streak_date === yesterday ? profile.streak ?? 0 : 0;
 
   const streakCreditedRef = useRef(false);
   useEffect(() => {
     if (!profile || tasksDone < 3 || streakCreditedRef.current) return;
     streakCreditedRef.current = true;
-    if (profile.last_active === date) return; // already counted today
-    const newStreak = profile.last_active === yesterday ? (profile.streak ?? 0) + 1 : 1;
+    if (profile.streak_date === date) return; // already counted today
+    const newStreak = profile.streak_date === yesterday ? (profile.streak ?? 0) + 1 : 1;
     const newLongest = Math.max(profile.longest_streak ?? 0, newStreak);
-    setProfile((p) => (p ? { ...p, streak: newStreak, longest_streak: newLongest, last_active: date } : p));
+    setProfile((p) => (p ? { ...p, streak: newStreak, longest_streak: newLongest, streak_date: date } : p));
     (async () => {
       if (DEMO) {
-        demoSet("streakState", { streak: newStreak, longest_streak: newLongest, last_active: date });
+        demoSet("streakState", { streak: newStreak, longest_streak: newLongest, streak_date: date });
         return;
       }
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (user) await supabase.from("profiles").update({ streak: newStreak, longest_streak: newLongest, last_active: date }).eq("id", user.id);
+      if (user) await supabase.from("profiles").update({ streak: newStreak, longest_streak: newLongest, streak_date: date }).eq("id", user.id);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasksDone, profile]);

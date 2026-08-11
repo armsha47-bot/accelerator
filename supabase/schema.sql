@@ -24,6 +24,7 @@ create table if not exists profiles (
   weight_unit text default 'lbs',
   onboarded boolean default false,
   last_active date,
+  streak_date date, -- last date the daily streak was credited (3+ tasks done)
   created_at timestamptz default now()
 );
 
