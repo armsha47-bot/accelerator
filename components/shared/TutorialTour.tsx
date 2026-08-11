@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /**
  * First-launch tooltip tour. Spotlights a sequence of elements (by CSS selector)
@@ -19,6 +19,8 @@ export default function TutorialTour({ steps }: { steps: TourStep[] }) {
   const [active, setActive] = useState(false);
   const [i, setI] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [cardH, setCardH] = useState(0);
 
   useEffect(() => {
     // Give the page a beat to render its targets, then start if not seen.
@@ -45,6 +47,13 @@ export default function TutorialTour({ steps }: { steps: TourStep[] }) {
     return () => window.removeEventListener("resize", measure);
   }, [active, i, steps]);
 
+  // Measure the tooltip card's real height so we can keep it fully on-screen.
+  useLayoutEffect(() => {
+    if (!active) return;
+    const el = cardRef.current;
+    if (el) setCardH(el.offsetHeight);
+  }, [active, i, rect]);
+
   if (!active || steps.length === 0) return null;
 
   const finish = () => {
@@ -59,9 +68,24 @@ export default function TutorialTour({ steps }: { steps: TourStep[] }) {
     ? { top: rect.top - pad, left: rect.left - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 }
     : null;
 
-  // Place the tooltip below the target if there's room, else above / centered.
-  const belowRoom = rect ? window.innerHeight - rect.bottom > 200 : true;
-  const tipTop = rect ? (belowRoom ? rect.bottom + 16 : rect.top - 16) : window.innerHeight / 2;
+  // Safe-area-aware margins so the card clears the notch / home indicator.
+  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+  const marginTop = 16;
+  const marginBottom = 24;
+  const gap = 14; // space between the card and the spotlighted target
+  const h = cardH || 220; // fall back to an estimate until measured
+
+  // Prefer below the target; flip above if it wouldn't fit; else center.
+  let tipTop: number;
+  if (rect) {
+    const fitsBelow = rect.bottom + gap + h + marginBottom <= vh;
+    tipTop = fitsBelow ? rect.bottom + gap : rect.top - gap - h;
+  } else {
+    tipTop = (vh - h) / 2;
+  }
+  // Final clamp: never let the card run off the top or bottom of the screen.
+  const maxTop = Math.max(marginTop, vh - h - marginBottom);
+  tipTop = Math.min(Math.max(tipTop, marginTop), maxTop);
 
   return (
     <div className="fixed inset-0 z-[70]">
@@ -83,8 +107,9 @@ export default function TutorialTour({ steps }: { steps: TourStep[] }) {
 
       {/* Tooltip card */}
       <div
-        className="absolute left-1/2 w-[min(88vw,340px)] -translate-x-1/2 rounded-3xl border border-border bg-surface p-5 shadow-soft"
-        style={{ top: tipTop, transform: `translate(-50%, ${rect && !belowRoom ? "-100%" : "0"})` }}
+        ref={cardRef}
+        className="absolute left-1/2 max-h-[80vh] w-[min(88vw,340px)] -translate-x-1/2 overflow-y-auto rounded-3xl border border-border bg-surface p-5 shadow-soft"
+        style={{ top: tipTop, opacity: cardH || !rect ? 1 : 0 }}
       >
         <div className="mb-1 flex items-center gap-2">
           <span className="pill bg-white/10 text-ink">{i + 1}/{steps.length}</span>
