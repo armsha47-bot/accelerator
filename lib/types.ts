@@ -76,6 +76,49 @@ export interface FoodLog {
   unit: string;
 }
 
+/** A selectable portion for a food. `quantity` multiplies the food's base macros. */
+export interface FoodPortion {
+  label: string; // e.g. "1 cup (240 g)", "100 g", "1 serving"
+  quantity: number; // multiple of the base unit (base macros are for quantity = 1)
+}
+
+/**
+ * A normalized search hit. Macros are for the BASE unit (quantity = 1); a
+ * FoodPortion's `quantity` scales them, and the portion picker multiplies again
+ * by how many the user logs. Works for USDA (per-100 g), the offline DB
+ * (per-serving), and custom foods alike.
+ */
+export interface FoodHit {
+  food_name: string;
+  brand?: string;
+  base_unit: string; // label of quantity = 1 (e.g. "100 g", "serving")
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  portions: FoodPortion[];
+  source?: "usda" | "offline" | "custom";
+}
+
+export interface CustomFood {
+  id: string;
+  name: string;
+  serving_label: string;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  ingredients: CustomIngredient[];
+}
+
+export interface CustomIngredient {
+  name: string;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+}
+
 export interface LeaderboardUser {
   id: string;
   display_name: string;

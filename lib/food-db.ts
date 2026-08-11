@@ -3,6 +3,8 @@
  * Nutritionix isn't configured). Macros are per the listed serving — realistic
  * ballpark values, vegetarian-friendly coverage plus common staples.
  */
+import type { FoodHit } from "./types";
+
 export interface FoodItem {
   food_name: string;
   serving_unit: string;
@@ -105,4 +107,29 @@ export function searchFoodDb(query: string, limit = 12): FoodItem[] {
   }).filter((s) => s.score > 0);
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, limit).map((s) => s.f);
+}
+
+/** Same search, returned as portion-aware FoodHit[] for the picker UI. */
+export function searchFoodDbHits(query: string, limit = 12): FoodHit[] {
+  return searchFoodDb(query, limit).map(toHit);
+}
+
+/** Convert a per-serving offline item into a FoodHit with sensible portions. */
+export function toHit(f: FoodItem): FoodHit {
+  const u = f.serving_unit;
+  return {
+    food_name: f.food_name,
+    base_unit: u,
+    calories: f.calories,
+    protein_g: f.protein_g,
+    carbs_g: f.carbs_g,
+    fat_g: f.fat_g,
+    portions: [
+      { label: `1 ${u}`, quantity: 1 },
+      { label: `½ ${u}`, quantity: 0.5 },
+      { label: `2 ${u}`, quantity: 2 },
+      { label: `3 ${u}`, quantity: 3 },
+    ],
+    source: "offline",
+  };
 }

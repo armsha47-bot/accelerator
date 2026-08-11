@@ -8,8 +8,8 @@ import { todayISO, XP } from "@/lib/xp-utils";
 import { compressImage } from "@/lib/image";
 import { DEMO, demoProfile } from "@/lib/demo";
 import { demoGet, demoSet } from "@/lib/demo-store";
-import { searchFoodDb } from "@/lib/food-db";
-import type { FoodLog, MealType, Profile } from "@/lib/types";
+import { searchFoodDbHits } from "@/lib/food-db";
+import type { FoodHit, FoodLog, FoodPortion, MealType, Profile } from "@/lib/types";
 import PageWrapper from "@/components/layout/PageWrapper";
 
 const MEALS: MealType[] = ["breakfast", "lunch", "dinner", "snack"];
@@ -23,8 +23,12 @@ export default function NutritionPage() {
   const [logs, setLogs] = useState<FoodLog[]>([]);
   const [water, setWater] = useState(0);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<FoodHit[]>([]);
   const [searching, setSearching] = useState(false);
+  // Portion picker state: which hit is being configured, chosen portion, count.
+  const [picking, setPicking] = useState<FoodHit | null>(null);
+  const [portionIdx, setPortionIdx] = useState(0);
+  const [count, setCount] = useState(1);
   const [meal, setMeal] = useState<MealType>("breakfast");
   const [scanItems, setScanItems] = useState<any[] | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -83,9 +87,10 @@ export default function NutritionPage() {
   async function search() {
     if (!query.trim()) return;
     setSearching(true);
+    setPicking(null);
     try {
       if (DEMO) {
-        setResults(searchFoodDb(query));
+        setResults(searchFoodDbHits(query));
         return;
       }
       const res = await fetch("/api/food-search", {
@@ -94,36 +99,45 @@ export default function NutritionPage() {
         body: JSON.stringify({ query }),
       });
       const data = await res.json();
-      // Fall back to the local DB if Nutritionix returns nothing / isn't set up.
-      setResults(data.foods?.length ? data.foods : searchFoodDb(query));
+      setResults(data.foods?.length ? data.foods : searchFoodDbHits(query));
     } catch {
-      setResults([]);
+      setResults(searchFoodDbHits(query));
     } finally {
       setSearching(false);
     }
   }
 
-  async function addFood(f: any) {
+  // Open the portion picker for a search hit.
+  function pickFood(h: FoodHit) {
+    setPicking(h);
+    setPortionIdx(0);
+    setCount(1);
+  }
+
+  // Log the currently-picked food at the chosen portion × count.
+  async function confirmAdd() {
+    if (!picking) return;
+    const p: FoodPortion = picking.portions[portionIdx] ?? { label: picking.base_unit, quantity: 1 };
+    const qty = +(p.quantity * count).toFixed(4);
+    const unit = count === 1 ? p.label : `${p.label} ×${count}`;
+    const base = {
+      food_name: picking.food_name,
+      calories: picking.calories,
+      protein_g: picking.protein_g,
+      carbs_g: picking.carbs_g,
+      fat_g: picking.fat_g,
+    };
+    setPicking(null);
+    setResults([]);
+    setQuery("");
+
     if (DEMO) {
-      const row = {
-        id: `demo-${Date.now()}`,
-        date,
-        meal_type: meal,
-        food_name: f.food_name,
-        calories: f.calories,
-        protein_g: f.protein_g,
-        carbs_g: f.carbs_g,
-        fat_g: f.fat_g,
-        quantity: 1,
-        unit: f.serving_unit ?? "serving",
-      } as FoodLog;
+      const row = { id: `demo-${Date.now()}`, date, meal_type: meal, ...base, quantity: qty, unit } as FoodLog;
       setLogs((l) => {
         const next = [...l, row];
         demoSet(`foodLogs:${date}`, next);
         return next;
       });
-      setResults([]);
-      setQuery("");
       await award(XP.MEAL, "log meal");
       return;
     }
@@ -133,23 +147,42 @@ export default function NutritionPage() {
     if (!user) return;
     const { data } = await supabase
       .from("food_logs")
-      .insert({
-        user_id: user.id,
-        date,
-        meal_type: meal,
-        food_name: f.food_name,
-        calories: f.calories,
-        protein_g: f.protein_g,
-        carbs_g: f.carbs_g,
-        fat_g: f.fat_g,
-        quantity: 1,
-        unit: f.serving_unit ?? "serving",
-      })
+      .insert({ user_id: user.id, date, meal_type: meal, ...base, quantity: qty, unit })
       .select()
       .single();
     if (data) setLogs((l) => [...l, data as FoodLog]);
-    setResults([]);
-    setQuery("");
+    await award(XP.MEAL, "log meal");
+  }
+
+  // Log an AI recipe suggestion directly (already a full meal).
+  async function logRecipe(rec: any) {
+    const base = {
+      food_name: rec.name,
+      calories: Math.round(rec.calories),
+      protein_g: rec.protein_g,
+      carbs_g: rec.carbs_g,
+      fat_g: rec.fat_g,
+    };
+    if (DEMO) {
+      const row = { id: `demo-${Date.now()}`, date, meal_type: meal, ...base, quantity: 1, unit: "meal" } as FoodLog;
+      setLogs((l) => {
+        const next = [...l, row];
+        demoSet(`foodLogs:${date}`, next);
+        return next;
+      });
+      await award(XP.MEAL, "log meal");
+      return;
+    }
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase
+      .from("food_logs")
+      .insert({ user_id: user.id, date, meal_type: meal, ...base, quantity: 1, unit: "meal" })
+      .select()
+      .single();
+    if (data) setLogs((l) => [...l, data as FoodLog]);
     await award(XP.MEAL, "log meal");
   }
 
@@ -385,10 +418,7 @@ export default function NutritionPage() {
                     </p>
                     {rec.note && <p className="mt-1 text-xs text-muted">{rec.note}</p>}
                   </div>
-                  <button
-                    className="chip shrink-0"
-                    onClick={() => addFood({ food_name: rec.name, calories: rec.calories, protein_g: rec.protein_g, carbs_g: rec.carbs_g, fat_g: rec.fat_g, serving_unit: "meal" })}
-                  >
+                  <button className="chip shrink-0" onClick={() => logRecipe(rec)}>
                     Log
                   </button>
                 </div>
@@ -495,12 +525,29 @@ export default function NutritionPage() {
             )}
           </div>
         )}
-        {results.length > 0 && (
+        {/* Portion picker for the selected food */}
+        {picking && (
+          <PortionPicker
+            hit={picking}
+            portionIdx={portionIdx}
+            count={count}
+            meal={meal}
+            onPortion={setPortionIdx}
+            onCount={setCount}
+            onCancel={() => setPicking(null)}
+            onConfirm={confirmAdd}
+          />
+        )}
+
+        {!picking && results.length > 0 && (
           <div className="mt-3 space-y-2">
             {results.map((f, i) => (
-              <button key={i} onClick={() => addFood(f)} className="flex w-full items-center justify-between rounded-2xl bg-elevated p-3 text-left">
-                <span className="font-medium capitalize">{f.food_name}</span>
-                <span className="text-sm text-muted">{f.calories} cal · +add</span>
+              <button key={i} onClick={() => pickFood(f)} className="flex w-full items-center justify-between gap-2 rounded-2xl bg-elevated p-3 text-left">
+                <span className="min-w-0">
+                  <span className="block truncate font-medium capitalize">{f.food_name}</span>
+                  {f.brand && <span className="block truncate text-xs text-muted">{f.brand}</span>}
+                </span>
+                <span className="shrink-0 text-sm text-muted">{f.calories} cal / {f.base_unit}</span>
               </button>
             ))}
           </div>
@@ -538,6 +585,74 @@ export default function NutritionPage() {
         )}
       </section>
     </PageWrapper>
+  );
+}
+
+function PortionPicker({
+  hit,
+  portionIdx,
+  count,
+  meal,
+  onPortion,
+  onCount,
+  onCancel,
+  onConfirm,
+}: {
+  hit: FoodHit;
+  portionIdx: number;
+  count: number;
+  meal: MealType;
+  onPortion: (i: number) => void;
+  onCount: (n: number) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const p = hit.portions[portionIdx] ?? { label: hit.base_unit, quantity: 1 };
+  const mult = p.quantity * count;
+  const round = (n: number) => Math.round(n * 10) / 10;
+  return (
+    <div className="mt-3 rounded-2xl border border-border bg-elevated p-3">
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate font-semibold capitalize">{hit.food_name}</p>
+          {hit.brand && <p className="truncate text-xs text-muted">{hit.brand}</p>}
+        </div>
+        <button onClick={onCancel} className="shrink-0 text-muted" aria-label="Cancel">✕</button>
+      </div>
+
+      <p className="mb-1 text-xs text-muted">Portion</p>
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {hit.portions.map((po, i) => (
+          <button
+            key={i}
+            onClick={() => onPortion(i)}
+            className={`pill ${i === portionIdx ? "bg-white text-bg" : "bg-surface text-muted"}`}
+          >
+            {po.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-sm text-muted">Quantity</span>
+        <div className="flex items-center gap-3">
+          <button onClick={() => onCount(Math.max(0.5, +(count - 0.5).toFixed(2)))} className="h-8 w-8 rounded-full bg-surface text-lg leading-none">−</button>
+          <span className="w-8 text-center font-semibold">{count}</span>
+          <button onClick={() => onCount(+(count + 0.5).toFixed(2))} className="h-8 w-8 rounded-full bg-surface text-lg leading-none">+</button>
+        </div>
+      </div>
+
+      <div className="mb-3 rounded-xl bg-surface p-3 text-center">
+        <div className="text-2xl font-bold">{Math.round(hit.calories * mult)} cal</div>
+        <div className="text-xs text-muted">
+          {round(hit.protein_g * mult)}p · {round(hit.carbs_g * mult)}c · {round(hit.fat_g * mult)}f
+        </div>
+      </div>
+
+      <button className="btn-primary w-full capitalize" onClick={onConfirm}>
+        Add to {meal} (+{XP.MEAL} XP)
+      </button>
+    </div>
   );
 }
 
