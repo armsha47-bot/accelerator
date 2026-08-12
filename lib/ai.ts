@@ -10,12 +10,15 @@
  * aliases point at it; split them later if you want a heavier model for vision.
  */
 // NOTE: new Google accounts must use the v1 endpoint (v1beta blocks the models
-// for "new users"). gemini-3.6-flash is current, multimodal, and free-tier.
+// for "new users"). gemini-3.5-flash-lite is multimodal (photo scans) and has a
+// generous free daily quota — the full flash models are capped at ~20/day free.
 const BASE = "https://generativelanguage.googleapis.com/v1";
+// Extra output-token headroom reserved for Gemini 3.x internal "thinking".
+const THINKING_BUFFER = 2048;
 
 export const MODELS = {
-  fast: "gemini-3.6-flash",
-  quality: "gemini-3.6-flash",
+  fast: "gemini-3.5-flash-lite",
+  quality: "gemini-3.5-flash-lite",
 } as const;
 
 function key(): string {
@@ -53,7 +56,13 @@ function requestBody(opts: GenOpts) {
   return {
     contents,
     ...(opts.system ? { systemInstruction: { parts: [{ text: opts.system }] } } : {}),
-    generationConfig: { maxOutputTokens: opts.maxTokens ?? 1024, temperature: opts.temperature ?? 0.7 },
+    generationConfig: {
+      // Gemini 3.x "thinks" before answering, and those thinking tokens count
+      // against maxOutputTokens. Reserve a big buffer so thinking never starves
+      // the actual reply (which otherwise comes back empty or truncated).
+      maxOutputTokens: (opts.maxTokens ?? 1024) + THINKING_BUFFER,
+      temperature: opts.temperature ?? 0.7,
+    },
   };
 }
 
@@ -91,34 +100,46 @@ export async function aiStream(opts: GenOpts, onDone?: (full: string) => Promise
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
-  let full = "";
-  let buffer = "";
 
+  // start-based loop: read the whole Gemini stream, then ALWAYS close (even if
+  // the final persist throws) so the client's reader never hangs — a hang would
+  // leave the coach's "busy" flag stuck and block the next message.
   return new ReadableStream({
-    async pull(controller) {
-      const { done, value } = await reader.read();
-      if (done) {
-        if (onDone) await onDone(full);
-        controller.close();
-        return;
-      }
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? ""; // keep the trailing partial line
-      for (const line of lines) {
-        const t = line.trim();
-        if (!t.startsWith("data:")) continue;
-        const json = t.slice(5).trim();
-        if (!json || json === "[DONE]") continue;
-        try {
-          const obj = JSON.parse(json);
-          const text = obj.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("") ?? "";
-          if (text) {
-            full += text;
-            controller.enqueue(encoder.encode(text));
+    async start(controller) {
+      let full = "";
+      let buffer = "";
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? ""; // keep the trailing partial line
+          for (const line of lines) {
+            const t = line.trim();
+            if (!t.startsWith("data:")) continue;
+            const json = t.slice(5).trim();
+            if (!json || json === "[DONE]") continue;
+            try {
+              const obj = JSON.parse(json);
+              const text = obj.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("") ?? "";
+              if (text) {
+                full += text;
+                controller.enqueue(encoder.encode(text));
+              }
+            } catch {
+              /* partial JSON across chunks — ignore */
+            }
           }
-        } catch {
-          /* partial JSON across chunks — ignore */
+        }
+      } finally {
+        controller.close();
+        if (onDone) {
+          try {
+            await onDone(full);
+          } catch {
+            /* persistence failure shouldn't break the stream */
+          }
         }
       }
     },

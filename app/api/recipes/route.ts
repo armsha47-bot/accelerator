@@ -43,7 +43,8 @@ export async function POST(req: Request) {
   try {
     const recipes = await aiJson<Recipe[]>({ model: MODELS.fast, maxTokens: 700, prompt });
     return NextResponse.json({ recipes });
-  } catch {
+  } catch (e) {
+    console.error("[recipes] generation failed:", e);
     return NextResponse.json({ error: "generation failed" }, { status: 502 });
   }
 }

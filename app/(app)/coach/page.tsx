@@ -36,6 +36,18 @@ export default function CoachPage() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
+  // Wipe the whole conversation when leaving the coach (privacy). Runs on unmount.
+  useEffect(() => {
+    return () => {
+      (async () => {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) await supabase.from("coach_messages").delete().eq("user_id", user.id);
+      })();
+    };
+  }, [supabase]);
+
   async function send() {
     const text = input.trim();
     if (!text || busy) return;
