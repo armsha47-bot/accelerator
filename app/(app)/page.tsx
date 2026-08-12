@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, Reorder, useDragControls } from "framer-motion";
 import { browserClient } from "@/lib/supabase";
 import { useXP } from "@/hooks/useXP";
 import { greeting, todayISO, mondayISO, XP } from "@/lib/xp-utils";
@@ -51,6 +51,8 @@ export default function HomePage() {
   const [customTasks, setCustomTasks] = useState<any[]>([]);
   // Task keys the user removed for today (base or custom), kept in localStorage.
   const [hiddenTasks, setHiddenTasks] = useState<string[]>([]);
+  // Custom drag order of task keys per slot (localStorage-persisted).
+  const [taskOrder, setTaskOrder] = useState<Record<string, string[]>>({});
   const [review, setReview] = useState<{ id: string; content: string; week_start: string } | null>(null);
   const [quests, setQuests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,12 +64,17 @@ export default function HomePage() {
   const date = todayISO();
 
   const load = useCallback(async () => {
-    // Tasks removed for today (works in both demo and real via localStorage).
+    // Tasks removed for today + custom drag order (localStorage, both modes).
     if (typeof window !== "undefined") {
       try {
         setHiddenTasks(JSON.parse(localStorage.getItem(`accel_hidden:${date}`) || "[]"));
       } catch {
         setHiddenTasks([]);
+      }
+      try {
+        setTaskOrder(JSON.parse(localStorage.getItem("accel_taskorder") || "{}"));
+      } catch {
+        setTaskOrder({});
       }
     }
     if (DEMO) {
@@ -343,6 +350,29 @@ export default function HomePage() {
     });
   }
 
+  // Persist a slot's new drag order (array of task keys).
+  function reorderSlot(slot: Slot, keys: string[]) {
+    setTaskOrder((prev) => {
+      const next = { ...prev, [slot]: keys };
+      if (typeof window !== "undefined") localStorage.setItem("accel_taskorder", JSON.stringify(next));
+      return next;
+    });
+  }
+
+  // Sort a slot's tasks by the saved order; unlisted keys keep their natural spot at the end.
+  function orderedSlot(slot: Slot, items: { key: string; task: PlanTask }[]) {
+    const ord = taskOrder[slot];
+    if (!ord?.length) return items;
+    return [...items].sort((a, b) => {
+      const ia = ord.indexOf(a.key);
+      const ib = ord.indexOf(b.key);
+      if (ia === -1 && ib === -1) return 0;
+      if (ia === -1) return 1;
+      if (ib === -1) return -1;
+      return ia - ib;
+    });
+  }
+
   if (loading) return <HomeSkeleton />;
 
   const lp = levelProgress(profile?.xp ?? 0);
@@ -397,22 +427,28 @@ export default function HomePage() {
         </div>
         <div className="space-y-3">
           {SLOTS.map(({ key, label, accent }) => {
-            const tasks = allTasks.filter((t) => t.slot === key);
+            const tasks = orderedSlot(key, allTasks.filter((t) => t.slot === key));
             if (tasks.length === 0) return null;
             return (
               <div key={key} className="card-sm border-l-[3px]" style={{ borderLeftColor: accent, boxShadow: "inset 3px 0 8px -4px rgba(255,255,255,0.6)" }}>
                 <h3 className="mb-2 text-sm font-semibold text-muted">{label}</h3>
-                <div className="space-y-2">
+                <Reorder.Group
+                  axis="y"
+                  values={tasks.map((t) => t.key)}
+                  onReorder={(keys) => reorderSlot(key, keys as string[])}
+                  className="space-y-2"
+                >
                   {tasks.map(({ key: tkey, task }) => (
-                    <TaskRow
+                    <ReorderableTask
                       key={tkey}
+                      tkey={tkey}
                       task={task}
                       done={doneTasks.has(tkey)}
                       onToggle={() => toggleTask(tkey, task)}
                       onRemove={() => removeTaskToday(tkey)}
                     />
                   ))}
-                </div>
+                </Reorder.Group>
               </div>
             );
           })}
@@ -566,6 +602,62 @@ export default function HomePage() {
         />
       )}
     </PageWrapper>
+  );
+}
+
+// Wraps a task so it can be press-and-hold dragged to reorder within its slot.
+// A ~220ms hold (that doesn't turn into a scroll) picks it up; then it slides.
+function ReorderableTask({
+  tkey,
+  task,
+  done,
+  onToggle,
+  onRemove,
+}: {
+  tkey: string;
+  task: PlanTask;
+  done: boolean;
+  onToggle: () => void;
+  onRemove?: () => void;
+}) {
+  const controls = useDragControls();
+  const holdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startPos = useRef<{ x: number; y: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const clearHold = () => {
+    if (holdRef.current) clearTimeout(holdRef.current);
+    holdRef.current = null;
+  };
+  return (
+    <Reorder.Item
+      value={tkey}
+      dragListener={false}
+      dragControls={controls}
+      style={{ touchAction: dragging ? "none" : "pan-y" }}
+      whileDrag={{ scale: 1.03, boxShadow: "0 10px 26px rgba(0,0,0,0.55)", zIndex: 40, position: "relative" }}
+      onPointerDown={(e: React.PointerEvent) => {
+        startPos.current = { x: e.clientX, y: e.clientY };
+        clearHold();
+        holdRef.current = setTimeout(() => {
+          if (typeof navigator !== "undefined") navigator.vibrate?.(25);
+          setDragging(true);
+          controls.start(e);
+        }, 220);
+      }}
+      onPointerMove={(e: React.PointerEvent) => {
+        if (holdRef.current && startPos.current) {
+          const moved = Math.abs(e.clientX - startPos.current.x) > 8 || Math.abs(e.clientY - startPos.current.y) > 8;
+          if (moved) clearHold(); // it's a scroll, not a hold
+        }
+      }}
+      onPointerUp={clearHold}
+      onPointerCancel={clearHold}
+      onDragEnd={() => setDragging(false)}
+    >
+      <div className={dragging ? "opacity-90" : ""}>
+        <TaskRow task={task} done={done} onToggle={onToggle} onRemove={onRemove} />
+      </div>
+    </Reorder.Item>
   );
 }
 
