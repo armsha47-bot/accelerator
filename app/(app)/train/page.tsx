@@ -240,7 +240,7 @@ function ScanCard({
         </div>
         {loading && <span className="text-sm text-muted">Analyzing…</span>}
       </button>
-      <input ref={inputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFile} />
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
       {result && (
         <div className="mt-3 rounded-2xl bg-elevated p-4">
           <div className="mb-2 flex items-center gap-3">

@@ -583,7 +583,7 @@ export default function NutritionPage() {
         >
           {scanning ? "Analyzing photo…" : "📷 Scan a photo of your food"}
         </button>
-        <input ref={scanInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={onScanFile} />
+        <input ref={scanInput} type="file" accept="image/*" className="hidden" onChange={onScanFile} />
 
         {scanItems && (
           <div className="mt-3 rounded-2xl bg-elevated p-3">
@@ -596,17 +596,17 @@ export default function NutritionPage() {
                   {scanItems.map((it, i) => (
                     <div key={i} className="flex items-center gap-2">
                       <input
-                        className="flex-1 rounded-xl bg-surface px-3 py-2 text-sm capitalize"
+                        className="min-w-0 flex-1 rounded-xl bg-surface px-3 py-2 text-sm capitalize"
                         value={it.food_name}
                         onChange={(e) => setScanItems((s) => s!.map((x, j) => (j === i ? { ...x, food_name: e.target.value } : x)))}
                       />
                       <input
                         type="number"
-                        className="w-20 rounded-xl bg-surface px-2 py-2 text-center text-sm"
+                        className="w-16 shrink-0 rounded-xl bg-surface px-2 py-2 text-center text-sm"
                         value={it.calories}
                         onChange={(e) => setScanItems((s) => s!.map((x, j) => (j === i ? { ...x, calories: +e.target.value } : x)))}
                       />
-                      <span className="text-xs text-muted">cal</span>
+                      <span className="shrink-0 text-xs text-muted">cal</span>
                     </div>
                   ))}
                 </div>
