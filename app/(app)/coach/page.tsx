@@ -48,6 +48,27 @@ export default function CoachPage() {
     };
   }, [supabase]);
 
+  // Apply a schedule action the coach embedded (clear + add custom tasks).
+  async function applySchedule(action: { clear?: boolean; tasks?: { title: string; slot?: string }[] }) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    if (action.clear) await supabase.from("custom_tasks").delete().eq("user_id", user.id);
+    const rows = (action.tasks ?? [])
+      .filter((t) => t.title?.trim())
+      .map((t) => ({
+        user_id: user.id,
+        title: t.title.trim(),
+        time_slot: ["morning", "afternoon", "evening"].includes(t.slot ?? "") ? t.slot : "morning",
+        category: "mindset",
+        xp_reward: 15,
+        days_of_week: [0, 1, 2, 3, 4, 5, 6],
+        active: true,
+      }));
+    if (rows.length) await supabase.from("custom_tasks").insert(rows);
+  }
+
   async function send() {
     const text = input.trim();
     if (!text || busy) return;
@@ -69,9 +90,29 @@ export default function CoachPage() {
         const { done, value } = await reader.read();
         if (done) break;
         acc += decoder.decode(value, { stream: true });
+        // Hide the raw schedule block from view while streaming.
+        const shown = acc.replace(/```schedule[\s\S]*$/, "").trim();
         setMessages((m) => {
           const copy = [...m];
-          copy[copy.length - 1] = { role: "assistant", content: acc };
+          copy[copy.length - 1] = { role: "assistant", content: shown || acc };
+          return copy;
+        });
+      }
+
+      // If the coach embedded a schedule action, apply it + confirm.
+      const block = acc.match(/```schedule\s*([\s\S]*?)```/);
+      if (block) {
+        const cleaned = acc.replace(/```schedule[\s\S]*?```/, "").trim();
+        let note = "";
+        try {
+          await applySchedule(JSON.parse(block[1].trim()));
+          note = "\n\n✅ *Schedule updated — check the Home tab.*";
+        } catch {
+          note = "\n\n⚠️ *Couldn't apply that change.*";
+        }
+        setMessages((m) => {
+          const copy = [...m];
+          copy[copy.length - 1] = { role: "assistant", content: (cleaned || "Done.") + note };
           return copy;
         });
       }
