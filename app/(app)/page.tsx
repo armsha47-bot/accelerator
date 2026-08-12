@@ -440,7 +440,7 @@ export default function HomePage() {
                 className="card-sm flex w-full items-center gap-3 text-left"
               >
                 <CircleCheck checked={doneHabits.has(h.id)} color="#22C55E" />
-                <span className="flex-1 font-medium">{h.title}</span>
+                <StrikeText done={doneHabits.has(h.id)} className="flex-1 font-medium">{h.title}</StrikeText>
                 <span className="pill bg-elevated text-muted">+{h.xp_reward}</span>
               </motion.button>
             ))}
@@ -459,7 +459,7 @@ export default function HomePage() {
                   <CircleCheck checked={q.completed} color="#F59E0B" />
                 </button>
                 <div className="flex-1">
-                  <p className={`font-medium ${q.completed ? "text-muted line-through" : ""}`}>{q.title}</p>
+                  <StrikeText done={q.completed} className="block font-medium">{q.title}</StrikeText>
                   {q.target > 1 && (
                     <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-border">
                       <div className="h-full rounded-full bg-gold" style={{ width: `${Math.min(100, ((q.progress ?? 0) / q.target) * 100)}%` }} />
@@ -590,16 +590,8 @@ function TaskRow({
         <button onClick={onToggle} className="mt-0.5">
           <CircleCheck checked={done} color="#F0F0F0" />
         </button>
-        <div className="flex-1">
-          <span className="relative inline-block font-medium">
-            <span className={done ? "text-muted" : ""}>{task.title}</span>
-            <motion.span
-              className="absolute left-0 top-1/2 h-[1.5px] w-full origin-left bg-muted"
-              initial={false}
-              animate={{ scaleX: done ? 1 : 0 }}
-              transition={{ duration: 0.2 }}
-            />
-          </span>
+        <div className="min-w-0 flex-1">
+          <StrikeText done={done} className="font-medium">{task.title}</StrikeText>
           {task.description && <p className="mt-0.5 text-xs text-muted">{task.description}</p>}
           {task.why_this_matters && (
             <button onClick={() => setOpen((o) => !o)} className="mt-1 block text-xs font-medium text-ink">
@@ -620,6 +612,29 @@ function TaskRow({
         </div>
       </div>
     </motion.div>
+  );
+}
+
+// Animated strike-through that grows left→right and correctly crosses EVERY
+// line of a wrapped (multi-line) title. Uses a background gradient with
+// box-decoration-break so each line fragment gets its own line. Shared by
+// tasks, habits, and quests so the cross-out is identical everywhere.
+function StrikeText({ done, children, className = "" }: { done: boolean; children: React.ReactNode; className?: string }) {
+  return (
+    <span
+      className={`${className} ${done ? "text-muted" : ""}`}
+      style={{
+        backgroundImage: "linear-gradient(#8A8A8A, #8A8A8A)",
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "0 60%",
+        backgroundSize: done ? "100% 1.5px" : "0% 1.5px",
+        transition: "background-size 0.25s ease, color 0.25s ease",
+        WebkitBoxDecorationBreak: "clone",
+        boxDecorationBreak: "clone",
+      }}
+    >
+      {children}
+    </span>
   );
 }
 

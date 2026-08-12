@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import ParticleBurst from "@/components/shared/ParticleBurst";
+import { todayISO } from "@/lib/xp-utils";
 
 /**
  * 7-day completion bubbles (Mon..Sun) — BINARY ONLY. A bubble is either solid
@@ -25,7 +26,9 @@ function mondayOf(d: Date): Date {
   x.setHours(0, 0, 0, 0);
   return x;
 }
-const iso = (d: Date) => d.toISOString().slice(0, 10);
+// LOCAL date (not UTC) — toISOString would roll over to tomorrow late at night
+// in western timezones, making the wrong day light up as "today".
+const iso = (d: Date) => todayISO(d);
 
 export default function WeekBubbles({
   statuses,
