@@ -321,25 +321,26 @@ export default function HomePage() {
     setReview(null);
   }
 
-  // Remove any task (base plan or custom) for today. Hidden keys live in
-  // localStorage so it works without a schema change; custom tasks also get a
-  // server-side day override so they stay gone after a reload on any device.
+  // Delete a task. Custom tasks are removed FOR GOOD (deleted from the DB) so
+  // they don't come back the next day. Base plan tasks are AI-generated fresh
+  // each day, so they're hidden just for today (localStorage).
   async function removeTaskToday(key: string) {
+    if (key.startsWith("custom:")) {
+      const taskId = key.slice("custom:".length);
+      setCustomTasks((ts) => ts.filter((t) => t.id !== taskId));
+      if (DEMO) {
+        demoSet("customTasksList", demoGet<any[]>("customTasksList", []).filter((t) => t.id !== taskId));
+      } else {
+        await supabase.from("custom_tasks").delete().eq("id", taskId);
+      }
+      return;
+    }
+    // Base plan task — hide for today only.
     setHiddenTasks((h) => {
       const next = Array.from(new Set([...h, key]));
       if (typeof window !== "undefined") localStorage.setItem(`accel_hidden:${date}`, JSON.stringify(next));
       return next;
     });
-    if (key.startsWith("custom:")) {
-      const taskId = key.slice("custom:".length);
-      setCustomTasks((ts) => ts.filter((t) => t.id !== taskId));
-      if (!DEMO) {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (user) await supabase.from("task_day_overrides").insert({ user_id: user.id, task_id: taskId, date, action: "remove" });
-      }
-    }
   }
 
   if (loading) return <HomeSkeleton />;
