@@ -24,6 +24,8 @@ export default function TasksPage() {
   const supabase = useMemo(() => browserClient(), []);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [tasks, setTasks] = useState<CustomTask[]>([]);
+  const [weekly, setWeekly] = useState<{ id: string; title: string }[]>([]);
+  const [newWeekly, setNewWeekly] = useState("");
   const [showTask, setShowTask] = useState(false);
   const [showHabit, setShowHabit] = useState(false);
 
@@ -31,19 +33,50 @@ export default function TasksPage() {
     if (DEMO) {
       setHabits([...demoHabits, ...demoGet<Habit[]>("customHabits", [])]);
       setTasks(demoGet<CustomTask[]>("customTasksList", []));
+      setWeekly(demoGet<any[]>("weeklyTasks", []));
       return;
     }
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-    const [{ data: h }, { data: t }] = await Promise.all([
+    const [{ data: h }, { data: t }, { data: w }] = await Promise.all([
       supabase.from("habits").select("*").eq("user_id", user.id).eq("active", true),
       supabase.from("custom_tasks").select("*").eq("user_id", user.id).eq("active", true),
+      supabase.from("weekly_tasks").select("id, title").eq("user_id", user.id).order("created_at"),
     ]);
     setHabits((h ?? []) as Habit[]);
     setTasks((t ?? []) as CustomTask[]);
+    setWeekly((w ?? []) as any);
   }, [supabase]);
+
+  async function addWeekly() {
+    const title = newWeekly.trim();
+    if (!title) return;
+    setNewWeekly("");
+    if (DEMO) {
+      const next = [...demoGet<any[]>("weeklyTasks", []), { id: `demo-${Date.now()}`, title, completed_week: null }];
+      demoSet("weeklyTasks", next);
+      load();
+      return;
+    }
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from("weekly_tasks").insert({ user_id: user.id, title });
+    load();
+  }
+
+  async function deleteWeekly(id: string) {
+    if (DEMO) {
+      demoSet("weeklyTasks", demoGet<any[]>("weeklyTasks", []).filter((x) => x.id !== id));
+      load();
+      return;
+    }
+    await supabase.from("weekly_tasks").delete().eq("id", id);
+    load();
+  }
 
   useEffect(() => {
     load();
@@ -70,6 +103,33 @@ export default function TasksPage() {
                   <p className="text-xs capitalize text-muted">{t.time_slot} · {t.category} · +{t.xp_reward} XP</p>
                 </div>
                 <button onClick={async () => { if (DEMO) { const next = tasks.filter((x) => x.id !== t.id); demoSet("customTasksList", next); load(); } else { await supabase.from("custom_tasks").update({ active: false }).eq("id", t.id); load(); } }} className="text-muted">✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Weekly tasks */}
+      <section className="mb-6">
+        <h2 className="mb-3 text-lg font-bold">Weekly Tasks</h2>
+        <div className="mb-2 flex gap-2">
+          <input
+            className="input flex-1"
+            placeholder="New weekly task"
+            value={newWeekly}
+            onChange={(e) => setNewWeekly(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addWeekly()}
+          />
+          <button className="btn-primary px-4" onClick={addWeekly}>Add</button>
+        </div>
+        {weekly.length === 0 ? (
+          <p className="card-sm text-sm text-muted">No weekly tasks yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {weekly.map((w) => (
+              <div key={w.id} className="card-sm flex items-center justify-between">
+                <p className="font-medium">{w.title}</p>
+                <button onClick={() => deleteWeekly(w.id)} className="text-muted">✕</button>
               </div>
             ))}
           </div>
