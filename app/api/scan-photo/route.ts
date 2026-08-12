@@ -5,7 +5,7 @@
  */
 import { NextResponse } from "next/server";
 import { serverClient, adminClient } from "@/lib/supabase-server";
-import { anthropic, MODELS, textOf, parseJson } from "@/lib/anthropic";
+import { aiJson, MODELS } from "@/lib/ai";
 import { todayISO } from "@/lib/xp-utils";
 
 type Kind = "physique" | "posture" | "outfit" | "food";
@@ -40,20 +40,12 @@ export async function POST(req: Request) {
 
   let result: any;
   try {
-    const msg = await anthropic().messages.create({
+    result = await aiJson<any>({
       model: MODELS.quality,
-      max_tokens: 700,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: mediaType as any, data } },
-            { type: "text", text: PROMPTS[kind] },
-          ],
-        },
-      ],
+      maxTokens: 700,
+      prompt: PROMPTS[kind],
+      images: [{ mimeType: mediaType, data }],
     });
-    result = parseJson<any>(textOf(msg));
   } catch (e) {
     return NextResponse.json({ error: "analysis failed" }, { status: 502 });
   }

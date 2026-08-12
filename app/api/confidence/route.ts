@@ -4,7 +4,7 @@
  */
 import { NextResponse } from "next/server";
 import { serverClient, adminClient } from "@/lib/supabase-server";
-import { anthropic, MODELS, textOf } from "@/lib/anthropic";
+import { aiText, MODELS } from "@/lib/ai";
 
 export async function POST(req: Request) {
   const supabase = serverClient();
@@ -29,12 +29,8 @@ export async function POST(req: Request) {
       : `Write ONE powerful daily affirmation (1-2 sentences) for ${name}, personalized to his goals (${goals}). First person ("I"). No preamble, no quotes around it.`;
 
   try {
-    const msg = await anthropic().messages.create({
-      model: MODELS.fast,
-      max_tokens: mode === "hype" ? 400 : 120,
-      messages: [{ role: "user", content: prompt }],
-    });
-    return NextResponse.json({ text: textOf(msg) });
+    const text = await aiText({ model: MODELS.fast, maxTokens: mode === "hype" ? 400 : 120, prompt });
+    return NextResponse.json({ text });
   } catch {
     return NextResponse.json(
       { text: mode === "hype" ? "You've done the work. Trust it. Go take what's yours." : "I show up, I do the work, and I get better every single day." },

@@ -5,7 +5,7 @@
  */
 import { NextResponse } from "next/server";
 import { serverClient, adminClient } from "@/lib/supabase-server";
-import { anthropic, MODELS, textOf, parseJson } from "@/lib/anthropic";
+import { aiJson, MODELS } from "@/lib/ai";
 
 const DIET_RULE: Record<string, string> = {
   vegetarian: "STRICTLY VEGETARIAN (no meat or fish; eggs and dairy are fine)",
@@ -41,12 +41,8 @@ export async function POST(req: Request) {
 [{"name":"","calories":0,"protein_g":0,"carbs_g":0,"fat_g":0,"note":"one short reason"}]`;
 
   try {
-    const msg = await anthropic().messages.create({
-      model: MODELS.fast,
-      max_tokens: 700,
-      messages: [{ role: "user", content: prompt }],
-    });
-    return NextResponse.json({ recipes: parseJson<Recipe[]>(textOf(msg)) });
+    const recipes = await aiJson<Recipe[]>({ model: MODELS.fast, maxTokens: 700, prompt });
+    return NextResponse.json({ recipes });
   } catch {
     return NextResponse.json({ error: "generation failed" }, { status: 502 });
   }

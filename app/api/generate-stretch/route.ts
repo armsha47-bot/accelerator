@@ -5,7 +5,7 @@
  */
 import { NextResponse } from "next/server";
 import { serverClient, adminClient } from "@/lib/supabase-server";
-import { anthropic, MODELS, textOf, parseJson } from "@/lib/anthropic";
+import { aiJson, MODELS } from "@/lib/ai";
 
 export async function POST() {
   const supabase = serverClient();
@@ -37,12 +37,8 @@ export async function POST() {
   }. Return ONLY a JSON array of 6-8 stretches: [{"name":"","duration_seconds":30,"instructions":"","target_muscle":""}].`;
 
   try {
-    const msg = await anthropic().messages.create({
-      model: MODELS.fast,
-      max_tokens: 900,
-      messages: [{ role: "user", content: prompt }],
-    });
-    return NextResponse.json({ stretches: parseJson<any[]>(textOf(msg)) });
+    const stretches = await aiJson<any[]>({ model: MODELS.fast, maxTokens: 900, prompt });
+    return NextResponse.json({ stretches });
   } catch {
     return NextResponse.json({ error: "generation failed" }, { status: 502 });
   }

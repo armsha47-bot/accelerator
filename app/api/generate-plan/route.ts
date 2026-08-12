@@ -5,7 +5,7 @@
  */
 import { NextResponse } from "next/server";
 import { serverClient, adminClient } from "@/lib/supabase-server";
-import { anthropic, MODELS, textOf, parseJson } from "@/lib/anthropic";
+import { aiJson, MODELS } from "@/lib/ai";
 import { todayISO } from "@/lib/xp-utils";
 import type { PlanTask } from "@/lib/types";
 
@@ -59,12 +59,7 @@ Return ONLY JSON of this exact shape (2-3 morning, 2-3 afternoon, 1-2 evening ta
 
   let plan: PlanShape;
   try {
-    const msg = await anthropic().messages.create({
-      model: MODELS.fast,
-      max_tokens: 1400,
-      messages: [{ role: "user", content: prompt }],
-    });
-    plan = parseJson<PlanShape>(textOf(msg));
+    plan = await aiJson<PlanShape>({ model: MODELS.fast, maxTokens: 1400, prompt });
   } catch (e) {
     // Fall back to a sensible static plan so the app never shows an empty day.
     plan = FALLBACK_PLAN;

@@ -5,7 +5,7 @@
  */
 import { NextResponse } from "next/server";
 import { adminClient } from "@/lib/supabase-server";
-import { anthropic, MODELS, textOf } from "@/lib/anthropic";
+import { aiText, MODELS } from "@/lib/ai";
 import { todayISO } from "@/lib/xp-utils";
 
 function authorized(req: Request): boolean {
@@ -35,17 +35,11 @@ export async function GET(req: Request) {
 
     let content = `You logged ${workouts ?? 0} workouts and ${meals ?? 0} meals this week, earning ${xpEarned} XP. Keep the streak alive and pick one thing to sharpen next week.`;
     try {
-      const msg = await anthropic().messages.create({
+      content = await aiText({
         model: MODELS.fast,
-        max_tokens: 260,
-        messages: [
-          {
-            role: "user",
-            content: `Write a 100-150 word weekly review for ${u.name ?? "the athlete"} like a coach reviewing game film — direct, specific, honest. This week: ${workouts ?? 0} workouts, ${meals ?? 0} meals logged, ${xpEarned} XP, ${u.streak ?? 0}-day streak. Call out what was strong, what slipped, and one focus for next week. No preamble.`,
-          },
-        ],
+        maxTokens: 260,
+        prompt: `Write a 100-150 word weekly review for ${u.name ?? "the athlete"} like a coach reviewing game film — direct, specific, honest. This week: ${workouts ?? 0} workouts, ${meals ?? 0} meals logged, ${xpEarned} XP, ${u.streak ?? 0}-day streak. Call out what was strong, what slipped, and one focus for next week. No preamble.`,
       });
-      content = textOf(msg);
     } catch {
       /* fall back to the summary above */
     }

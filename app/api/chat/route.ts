@@ -4,7 +4,7 @@
  * plain text chunks (text/event-stream-ish; the client reads the stream).
  */
 import { serverClient, adminClient } from "@/lib/supabase-server";
-import { anthropic, MODELS } from "@/lib/anthropic";
+import { aiStream, MODELS } from "@/lib/ai";
 
 const SYSTEM = `You are Accelerator, a personal AI performance coach for Armaan, a 15-year-old soccer player (winger/CAM) who is also focused on academic excellence (especially math competitions), building confidence, and improving his nutrition (he is vegetarian). You know his goals, his schedule, and his mindset. Be direct, motivating, and specific — not generic. Reference his actual goals when relevant. Use markdown for structure when helpful. Keep replies tight.`;
 
@@ -34,26 +34,20 @@ export async function POST(req: Request) {
 
   await admin.from("coach_messages").insert({ user_id: user.id, role: "user", content: message });
 
-  const stream = await anthropic().messages.stream({
-    model: MODELS.quality,
-    max_tokens: 1024,
-    system: SYSTEM,
-    messages: [...priorMessages, { role: "user", content: message }],
-  });
-
-  const encoder = new TextEncoder();
-  let full = "";
-  const readable = new ReadableStream({
-    async start(controller) {
-      stream.on("text", (t) => {
-        full += t;
-        controller.enqueue(encoder.encode(t));
-      });
-      await stream.finalMessage();
-      await admin.from("coach_messages").insert({ user_id: user.id, role: "assistant", content: full });
-      controller.close();
-    },
-  });
+  let readable: ReadableStream;
+  try {
+    readable = await aiStream(
+      { system: SYSTEM, prompt: message, history: priorMessages, model: MODELS.quality, maxTokens: 1024 },
+      async (full) => {
+        await admin.from("coach_messages").insert({ user_id: user.id, role: "assistant", content: full });
+      }
+    );
+  } catch {
+    return new Response("The coach is unavailable right now. Try again in a moment.", {
+      status: 200,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
 
   return new Response(readable, {
     headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-cache" },
