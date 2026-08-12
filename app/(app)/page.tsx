@@ -53,6 +53,10 @@ export default function HomePage() {
   const [hiddenTasks, setHiddenTasks] = useState<string[]>([]);
   // Custom drag order of task keys per slot (localStorage-persisted).
   const [taskOrder, setTaskOrder] = useState<Record<string, string[]>>({});
+  // Weekly tasks (user-created; completion resets each week).
+  const [weeklyTasks, setWeeklyTasks] = useState<{ id: string; title: string; completed_week: string | null }[]>([]);
+  const [newWeekly, setNewWeekly] = useState("");
+  const [addingWeekly, setAddingWeekly] = useState(false);
   const [review, setReview] = useState<{ id: string; content: string; week_start: string } | null>(null);
   const [quests, setQuests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,6 +91,7 @@ export default function HomePage() {
       // Custom tasks the user added, scheduled for today.
       const dow = new Date().getDay();
       setCustomTasks(demoGet<any[]>("customTasksList", []).filter((t) => (t.days_of_week ?? []).includes(dow)));
+      setWeeklyTasks(demoGet<any[]>("weeklyTasks", []));
       // Restore persisted demo state so checks/XP survive navigation.
       setDoneTasks(new Set(demoGet<string[]>(`doneTasks:${date}`, [])));
       setDoneHabits(new Set(demoGet<string[]>(`doneHabits:${date}`, [])));
@@ -115,6 +120,7 @@ export default function HomePage() {
       { data: overrideRows },
       { data: reviewRows },
       { data: questRows },
+      { data: weeklyRows },
     ] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       fetch("/api/generate-plan", { method: "POST" }).then((r) => r.json()).catch(() => null),
@@ -126,6 +132,7 @@ export default function HomePage() {
       supabase.from("task_day_overrides").select("task_id, action").eq("user_id", user.id).eq("date", date),
       supabase.from("weekly_reviews").select("id, content, week_start").eq("user_id", user.id).eq("read", false).order("generated_at", { ascending: false }).limit(1),
       supabase.from("quests").select("*").eq("user_id", user.id).eq("week_start", weekStart),
+      supabase.from("weekly_tasks").select("id, title, completed_week").eq("user_id", user.id).order("created_at"),
     ]);
 
     if (prof) {
@@ -141,6 +148,7 @@ export default function HomePage() {
     setDoneHabits(new Set((hComps ?? []).map((c: any) => c.habit_id)));
     setReview((reviewRows ?? [])[0] ?? null);
     setQuests(questRows ?? []);
+    setWeeklyTasks((weeklyRows ?? []) as any);
 
     // Merge scheduled custom tasks for today, minus skip/remove overrides.
     const removed = new Set((overrideRows ?? []).filter((o: any) => o.action === "remove" || o.action === "skip").map((o: any) => o.task_id));
@@ -373,6 +381,52 @@ export default function HomePage() {
     });
   }
 
+  // ── Weekly tasks (user-created; completion resets each week) ───────────────
+  async function addWeeklyTask() {
+    const title = newWeekly.trim();
+    if (!title) return;
+    setNewWeekly("");
+    setAddingWeekly(false);
+    if (DEMO) {
+      setWeeklyTasks((w) => {
+        const next = [...w, { id: `demo-${Date.now()}`, title, completed_week: null }];
+        demoSet("weeklyTasks", next);
+        return next;
+      });
+      return;
+    }
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase.from("weekly_tasks").insert({ user_id: user.id, title }).select().single();
+    if (data) setWeeklyTasks((w) => [...w, data as any]);
+  }
+
+  async function toggleWeekly(wt: { id: string; title: string; completed_week: string | null }) {
+    const monday = mondayISO();
+    const isDone = wt.completed_week === monday;
+    const nextWeek = isDone ? null : monday;
+    setWeeklyTasks((ws) => {
+      const next = ws.map((x) => (x.id === wt.id ? { ...x, completed_week: nextWeek } : x));
+      if (DEMO) demoSet("weeklyTasks", next);
+      return next;
+    });
+    await award(isDone ? -XP.TASK : XP.TASK, isDone ? `undo weekly:${wt.title}` : `weekly:${wt.title}`);
+    if (!DEMO) await supabase.from("weekly_tasks").update({ completed_week: nextWeek }).eq("id", wt.id);
+  }
+
+  async function deleteWeekly(id: string) {
+    setWeeklyTasks((ws) => {
+      const next = ws.filter((x) => x.id !== id);
+      if (DEMO) demoSet("weeklyTasks", next);
+      return next;
+    });
+    if (!DEMO) await supabase.from("weekly_tasks").delete().eq("id", id);
+  }
+
+  const weekMonday = mondayISO();
+
   if (loading) return <HomeSkeleton />;
 
   const lp = levelProgress(profile?.xp ?? 0);
@@ -481,6 +535,47 @@ export default function HomePage() {
                 <span className="pill bg-elevated text-muted">+{h.xp_reward}</span>
               </motion.button>
             ))}
+          </div>
+        )}
+      </section>
+    ),
+    weeklyTasks: (
+      <section className="mb-5">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-bold">Weekly Tasks</h2>
+          <button onClick={() => setAddingWeekly((a) => !a)} className="text-sm font-medium text-ink">
+            {addingWeekly ? "Close" : "+ Add"}
+          </button>
+        </div>
+        {addingWeekly && (
+          <div className="card-sm mb-2 flex gap-2">
+            <input
+              className="input flex-1"
+              placeholder="New weekly task"
+              value={newWeekly}
+              onChange={(e) => setNewWeekly(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addWeeklyTask()}
+              autoFocus
+            />
+            <button className="btn-primary px-4" onClick={addWeeklyTask}>Add</button>
+          </div>
+        )}
+        {weeklyTasks.length === 0 ? (
+          <p className="card-sm text-sm text-muted">No weekly tasks yet — add goals you want to hit each week.</p>
+        ) : (
+          <div className="space-y-2">
+            {weeklyTasks.map((wt) => {
+              const done = wt.completed_week === weekMonday;
+              return (
+                <div key={wt.id} className="card-sm flex items-center gap-3">
+                  <button onClick={() => toggleWeekly(wt)}>
+                    <CircleCheck checked={done} color="#F0F0F0" />
+                  </button>
+                  <StrikeText done={done} className="flex-1 font-medium">{wt.title}</StrikeText>
+                  <button onClick={() => deleteWeekly(wt.id)} aria-label="Delete" className="shrink-0 text-muted transition-colors hover:text-macroFat">✕</button>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>

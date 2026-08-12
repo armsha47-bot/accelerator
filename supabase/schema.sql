@@ -207,6 +207,16 @@ create table if not exists custom_tasks (
   created_at timestamptz default now()
 );
 
+-- User-created weekly tasks. completed_week holds the Monday (week_start) of the
+-- week it was last checked; a new week automatically shows it unchecked.
+create table if not exists weekly_tasks (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references profiles(id) on delete cascade,
+  title text,
+  completed_week date,
+  created_at timestamptz default now()
+);
+
 create table if not exists task_day_overrides (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references profiles(id) on delete cascade,
@@ -414,7 +424,7 @@ begin
   foreach t in array array[
     'profiles','daily_plans','habits','habit_completions','quests','food_logs',
     'custom_foods','workouts','routines','physique_logs','body_weight_logs','xp_transactions',
-    'user_badges','custom_tasks','task_day_overrides','task_completions',
+    'user_badges','custom_tasks','weekly_tasks','task_day_overrides','task_completions',
     'wins_journal','ritual_sessions','focus_sessions','daily_checkins',
     'weekly_reviews','ai_habit_insights','daily_completion_status',
     'home_preferences','countdown_events','goal_milestones','study_sessions',

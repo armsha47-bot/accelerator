@@ -13,6 +13,7 @@ export const HOME_SECTIONS = [
   { id: "xp", label: "XP progress" },
   { id: "plan", label: "Daily plan", locked: true }, // always visible
   { id: "habits", label: "Habits" },
+  { id: "weeklyTasks", label: "Weekly tasks" },
   { id: "quests", label: "Weekly quests" },
   { id: "quote", label: "Motivational quote" },
 ] as const;
